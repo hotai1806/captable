@@ -42,9 +42,9 @@ services:
     command: [/bin/sh, -c, "pnpm install && pnpm db:studio"]
     volumes:
       - .:/app
-      - /app/node_modules
-      - /app/.next
-      - /app/.pnpm-store
+      # - /app/node_modules
+      # - /app/.next
+      # - /app/.pnpm-store
 
   pg:
     image: postgres:15
