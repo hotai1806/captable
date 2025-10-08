@@ -3,6 +3,7 @@
 import { FormValueProvider } from "@/providers/form-value-provider";
 import { GeneralDetails } from "../safe/steps/general-details";
 import { InvestorDetails } from "../safe/steps/investor-details";
+import { InvestorDetailsForm, mockStakeholders } from "../safe/steps/investor-details/mock-form";
 import { SafeTemplate } from "../safe/steps/safe-template";
 import {
   StepperModal,
@@ -23,7 +24,7 @@ export function NewSafeModal(props: Omit<StepperModalProps, "children">) {
 
         <StepperStep title="Investor details">
           <StepperModalContent>
-            <InvestorDetails />
+            <InvestorDetailsForm stakeholders={mockStakeholders} />
           </StepperModalContent>
         </StepperStep>
 
