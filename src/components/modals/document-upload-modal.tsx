@@ -27,10 +27,7 @@ export const DocumentUploadModal = ({
   const { mutateAsync } = api.document.create.useMutation();
 
   return (
-    <Modal
-      title={title}
-      subtitle={subtitle}
-    >
+    <Modal title={title} subtitle={subtitle}>
       <Uploader
         shouldUpload={true}
         identifier={companyPublicId}
