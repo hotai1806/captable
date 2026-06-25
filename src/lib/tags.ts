@@ -5,6 +5,7 @@ export enum TAG {
   ESIGN = "esign",
   EQUITY = "equity",
   DATA_ROOM = "data-room",
+  PROJECT_PROOF = "project-proof",
   GENERIC = "generic",
 }
 

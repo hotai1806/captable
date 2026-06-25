@@ -2,16 +2,25 @@
 
 import Modal from "@/components/common/push-modal";
 import Uploader, { type UploadReturn } from "@/components/ui/uploader";
-import { TAG } from "@/lib/tags";
+import { TAG, type TagType } from "@/lib/tags";
+import type { TypeKeyPrefixes } from "@/server/file-uploads";
 import { api } from "@/trpc/react";
 import { useRouter } from "next/navigation";
 
 type DocumentUploadModalProps = {
   companyPublicId: string;
+  title?: string;
+  subtitle?: string;
+  keyPrefix?: TypeKeyPrefixes;
+  tags?: TagType[];
 };
 
 export const DocumentUploadModal = ({
   companyPublicId,
+  title = "Upload a document",
+  subtitle = "Upload a document to your company's document library.",
+  keyPrefix = "generic-documents",
+  tags = [TAG.GENERIC],
 }: DocumentUploadModalProps) => {
   const router = useRouter();
 
@@ -19,14 +28,14 @@ export const DocumentUploadModal = ({
 
   return (
     <Modal
-      title="Upload a document"
-      subtitle="Upload a document to your company's document library."
+      title={title}
+      subtitle={subtitle}
     >
       <Uploader
         shouldUpload={true}
         identifier={companyPublicId}
-        keyPrefix="generic-documents"
-        tags={[TAG.GENERIC]}
+        keyPrefix={keyPrefix}
+        tags={tags}
         onSuccess={async (uploadedData: UploadReturn) => {
           await mutateAsync({
             name: uploadedData.name,
