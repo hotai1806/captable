@@ -129,6 +129,10 @@ const navigation = [
         href: "/data-rooms",
       },
       {
+        name: "Project proof",
+        href: "/project-proof",
+      },
+      {
         name: "eSign documents",
         href: "/esign",
       },

@@ -40,6 +40,7 @@ export type TypeKeyPrefixes =
   | "company-logos"
   | "profile-avatars"
   | "generic-documents"
+  | "project-proof-documents"
   | "shares-docs"
   | `data-room/${string}`;
 
