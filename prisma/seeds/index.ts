@@ -4,6 +4,7 @@ import inquirer from "inquirer";
 colors.enable();
 
 import type { QuestionCollection } from "inquirer";
+import seedCaptable from "./captable";
 import seedCompanies from "./companies";
 import seedTeam from "./team";
 
@@ -29,13 +30,13 @@ const seed = async () => {
     return db.$transaction(async () => {
       await seedCompanies();
       await seedTeam();
+      await seedCaptable();
     });
-  } else {
-    throw new Error("Seeding aborted");
   }
+  throw new Error("Seeding aborted");
 };
 
-const nuke = async () => {
+const nuke = () => {
   console.log("🚀 Nuking database records".yellow);
   return db.$transaction(async (db) => {
     await db.user.deleteMany();
@@ -47,6 +48,13 @@ const nuke = async () => {
     await db.bucket.deleteMany();
     await db.audit.deleteMany();
     await db.session.deleteMany();
+    await db.stakeholder.deleteMany();
+    await db.share.deleteMany();
+    await db.option.deleteMany();
+    await db.safe.deleteMany();
+    await db.convertibleNote.deleteMany();
+    await db.investment.deleteMany();
+    await db.bankAccount.deleteMany();
   });
 };
 
@@ -54,12 +62,12 @@ await seed()
   .then(async () => {
     console.log("✅ Database seeding completed".green);
     console.log(
-      `💌 We have created four admin accounts for you. Please login with one of these emails:\n`
+      "💌 We have created four admin accounts for you. Please login with one of these emails:\n"
         .cyan,
-      `ceo@example.com\n`.underline.yellow,
-      `cto@example.com\n`.underline.yellow,
-      `cfo@example.com\n`.underline.yellow,
-      `lawyer@example.com\n`.underline.yellow,
+      "ceo@example.com\n".underline.yellow,
+      "cto@example.com\n".underline.yellow,
+      "cfo@example.com\n".underline.yellow,
+      "lawyer@example.com\n".underline.yellow,
     );
     await db.$disconnect();
   })
