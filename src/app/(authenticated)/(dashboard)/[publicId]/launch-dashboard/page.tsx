@@ -1,5 +1,5 @@
-import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -171,7 +171,8 @@ const LaunchDashboardPage = async ({
     },
     {
       title: "Create share classes",
-      description: "Define common or preferred stock classes before issuing equity.",
+      description:
+        "Define common or preferred stock classes before issuing equity.",
       href: `/${publicId}/share-classes`,
       done: data.shareClassCount > 0,
     },
@@ -200,7 +201,10 @@ const LaunchDashboardPage = async ({
           ? "Your share classes are started. Keep your ownership model current as securities are issued."
           : "Start with a share class so equity issuances can roll into a clean cap table.",
       href: `/${publicId}/share-classes`,
-      cta: data.shareClassCount > 0 ? "Review share classes" : "Create share class",
+      cta:
+        data.shareClassCount > 0
+          ? "Review share classes"
+          : "Create share class",
     },
     {
       title: "Raise with SAFEs",
@@ -240,9 +244,9 @@ const LaunchDashboardPage = async ({
       value: compactFormatter.format(
         data.issuedShareQuantity + data.optionQuantity,
       ),
-      detail: `${formatNumber(data.issuedShareCount)} share issuances, ${formatNumber(
-        data.optionGrantCount,
-      )} option grants`,
+      detail: `${formatNumber(
+        data.issuedShareCount,
+      )} share issuances, ${formatNumber(data.optionGrantCount)} option grants`,
       icon: RiPieChartLine,
     },
     {
@@ -344,7 +348,9 @@ const LaunchDashboardPage = async ({
                   The highest-impact actions for a complete startup workspace.
                 </CardDescription>
               </div>
-              <Badge variant={completedTasks === tasks.length ? "success" : "info"}>
+              <Badge
+                variant={completedTasks === tasks.length ? "success" : "info"}
+              >
                 {completedTasks}/{tasks.length} complete
               </Badge>
             </div>
@@ -462,13 +468,17 @@ const LaunchDashboardPage = async ({
           {recommendations.map((recommendation) => (
             <Card key={recommendation.title}>
               <CardHeader>
-                <CardTitle className="text-base">{recommendation.title}</CardTitle>
+                <CardTitle className="text-base">
+                  {recommendation.title}
+                </CardTitle>
                 <CardDescription>{recommendation.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <Link
                   href={recommendation.href}
-                  className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                  )}
                 >
                   {recommendation.cta}
                   <RiArrowRightLine className="h-4 w-4" />

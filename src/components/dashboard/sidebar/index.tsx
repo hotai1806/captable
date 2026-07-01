@@ -15,8 +15,6 @@ import {
   RiGroup2Line,
   RiHome2Fill,
   RiHome2Line,
-  RiRocket2Fill,
-  RiRocket2Line,
   RiListCheck3,
   RiListIndefinite,
   RiMailSendFill,
@@ -25,6 +23,8 @@ import {
   RiMoneyDollarCircleLine,
   RiPieChartFill,
   RiPieChartLine,
+  RiRocket2Fill,
+  RiRocket2Line,
   RiSafeFill,
   RiSafeLine,
 } from "@remixicon/react";
