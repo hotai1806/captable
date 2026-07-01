@@ -7,6 +7,7 @@ import { billingRouter } from "../routers/billing-router/router";
 import { bucketRouter } from "../routers/bucket-router/router";
 import { commonRouter } from "../routers/common/router";
 import { companyRouter } from "../routers/company-router/router";
+import { dashboardRouter } from "../routers/dashboard-router/router";
 import { dataRoomRouter } from "../routers/data-room-router/router";
 import { documentRouter } from "../routers/document-router/router";
 import { documentShareRouter } from "../routers/document-share-router/router";
@@ -32,6 +33,7 @@ import { updateRouter } from "../routers/update/router";
 export const appRouter = createTRPCRouter({
   audit: auditRouter,
   company: companyRouter,
+  dashboard: dashboardRouter,
   document: documentRouter,
   documentShare: documentShareRouter,
   onboarding: onboardingRouter,
