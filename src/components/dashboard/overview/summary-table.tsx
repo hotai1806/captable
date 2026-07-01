@@ -8,47 +8,48 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card } from "@/components/ui/card";
+
 const formatter = new Intl.NumberFormat("en-US");
+const currencyFormatter = new Intl.NumberFormat("en-US");
 
-const SummaryTable = () => {
-  const shareClasses = [
-    {
-      id: 1,
-      name: "Common shares",
-      shares: 7000000,
-      diluted: 4500000,
-      ownership: 53,
-      raised: 10000000,
-    },
+export type SummaryTableShareClass = {
+  id: string;
+  name: string;
+  authorizedShares: number;
+  dilutedShares: number;
+  ownership: number;
+  raised: number;
+};
 
-    {
-      id: 2,
-      name: "Preferred (Series A)",
-      shares: 2000000,
-      diluted: 1500000,
-      ownership: 15,
-      raised: 18000000,
-    },
+type Props = {
+  shareClasses: SummaryTableShareClass[];
+  totalRaised: number;
+};
 
-    {
-      id: 3,
-      name: "Preferred (Convertible note)",
-      shares: 1000000,
-      diluted: 500000,
-      ownership: 7,
-      raised: 7000000,
-    },
+const SummaryTable = ({ shareClasses, totalRaised }: Props) => {
+  const raisedAcrossShareClasses = shareClasses.reduce(
+    (sum, klass) => sum + klass.raised,
+    0,
+  );
+  const hasUnallocatedCapital = totalRaised > raisedAcrossShareClasses;
 
-    {
-      id: 4,
-      name: "Stock Plan",
-      shares: 2000000,
-      diluted: 1000000,
-      ownership: 15,
-      raised: 2000000,
-    },
-  ];
+  if (!shareClasses.length) {
+    return (
+      <Card className="mt-4">
+        <div className="p-6">
+          <Alert>
+            <AlertDescription>
+              You haven{`'`}t created any share classes yet. Once you do, you
+              {`'`}ll see a breakdown of authorized, diluted, and raised amounts
+              here.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="mt-4">
@@ -66,11 +67,11 @@ const SummaryTable = () => {
           {shareClasses.map((klass) => (
             <TableRow key={klass.id} className="border-none">
               <TableCell className="font-medium">{klass.name}</TableCell>
-              <TableCell>{formatter.format(klass.shares)}</TableCell>
-              <TableCell>{formatter.format(klass.diluted)}</TableCell>
+              <TableCell>{formatter.format(klass.authorizedShares)}</TableCell>
+              <TableCell>{formatter.format(klass.dilutedShares)}</TableCell>
               <TableCell>{formatter.format(klass.ownership)} %</TableCell>
               <TableCell className="text-right">
-                $ {formatter.format(klass.raised)}
+                $ {currencyFormatter.format(klass.raised)}
               </TableCell>
             </TableRow>
           ))}
@@ -79,11 +80,18 @@ const SummaryTable = () => {
           <TableRow>
             <TableCell colSpan={4}>Total</TableCell>
             <TableCell className="text-right">
-              $ {formatter.format(55000000)}
+              $ {currencyFormatter.format(totalRaised)}
             </TableCell>
           </TableRow>
         </TableFooter>
       </Table>
+
+      {hasUnallocatedCapital && (
+        <p className="border-t px-4 py-3 text-xs text-muted-foreground">
+          The total includes capital raised through SAFEs and convertible notes
+          that haven{`'`}t converted into a share class yet.
+        </p>
+      )}
     </Card>
   );
 };

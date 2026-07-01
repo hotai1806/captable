@@ -12,7 +12,17 @@ type DonutTooltipProps = {
   value: number;
 };
 
-const DonutCard = () => {
+export type OwnershipBucket = {
+  key: string;
+  value: number;
+};
+
+type Props = {
+  stakeholderBreakdown: OwnershipBucket[];
+  shareClassBreakdown: OwnershipBucket[];
+};
+
+const DonutCard = ({ stakeholderBreakdown, shareClassBreakdown }: Props) => {
   const [isClient, setIsClient] = useState(false);
   const [selected, setSelected] = useState("stakeholder");
 
@@ -20,54 +30,8 @@ const DonutCard = () => {
     setIsClient(true);
   }, []);
 
-  const shareClasses = [
-    {
-      key: "Common shares",
-      value: 53,
-    },
-
-    {
-      key: "Preferred (Series A)",
-      value: 15,
-    },
-
-    {
-      key: "Preferred (Convertible note)",
-      value: 7,
-    },
-
-    {
-      key: "Stock Plan",
-      value: 15,
-    },
-  ];
-
-  const stakeholders = [
-    {
-      key: "Dennis Shelton",
-      value: 27,
-    },
-
-    {
-      key: "Camila Murphy",
-      value: 25,
-    },
-
-    {
-      key: "Others",
-      value: 18,
-    },
-
-    {
-      key: "Equity Plan",
-      value: 15,
-    },
-
-    {
-      key: "Acme Ventures",
-      value: 10,
-    },
-  ];
+  const data =
+    selected === "stakeholder" ? stakeholderBreakdown : shareClassBreakdown;
 
   return (
     <Fragment>
@@ -83,56 +47,49 @@ const DonutCard = () => {
           </CardHeader>
 
           <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <ScrollArea className="h-60 w-full py-4 pr-8">
-                <ul className="space-y-3 text-sm">
-                  {selected === "stakeholder"
-                    ? stakeholders.map((stakeholder) => (
-                        <li
-                          key={stakeholder.key}
-                          className="flex justify-between"
-                        >
-                          <span className="font-medium">{stakeholder.key}</span>
-                          <span>{stakeholder.value}%</span>
-                        </li>
-                      ))
-                    : shareClasses.map((stakeholder) => (
-                        <li
-                          key={stakeholder.key}
-                          className="flex justify-between"
-                        >
-                          <span className="font-medium">{stakeholder.key}</span>
-                          <span>{stakeholder.value}%</span>
-                        </li>
-                      ))}
-                </ul>
-              </ScrollArea>
+            {data.length ? (
+              <div className="grid grid-cols-2 gap-4">
+                <ScrollArea className="h-60 w-full py-4 pr-8">
+                  <ul className="space-y-3 text-sm">
+                    {data.map((item) => (
+                      <li key={item.key} className="flex justify-between">
+                        <span className="font-medium">{item.key}</span>
+                        <span>{item.value}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
 
-              <DonutChart
-                className="h-60 py-4"
-                data={selected === "stakeholder" ? stakeholders : shareClasses}
-                category="value"
-                index="key"
-                showLabel={false}
-                showAnimation={true}
-                customTooltip={({ payload }) => {
-                  if (Array.isArray(payload) && payload.length > 0) {
-                    const data = payload[0] as DonutTooltipProps;
+                <DonutChart
+                  className="h-60 py-4"
+                  data={data}
+                  category="value"
+                  index="key"
+                  showLabel={false}
+                  showAnimation={true}
+                  customTooltip={({ payload }) => {
+                    if (Array.isArray(payload) && payload.length > 0) {
+                      const data = payload[0] as DonutTooltipProps;
 
-                    return (
-                      <div className="rounded bg-white p-2 shadow-md">
-                        <p className="text-xs text-primary/80">
-                          <span className="font-semibold">{data.name}</span>:{" "}
-                          {data.value}%
-                        </p>
-                      </div>
-                    );
-                  }
+                      return (
+                        <div className="rounded bg-white p-2 shadow-md">
+                          <p className="text-xs text-primary/80">
+                            <span className="font-semibold">{data.name}</span>:{" "}
+                            {data.value}%
+                          </p>
+                        </div>
+                      );
+                    }
 
-                  return null;
-                }}
-              />
-            </div>
+                    return null;
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="flex h-60 items-center justify-center text-center text-sm text-muted-foreground">
+                Issue shares or options to see an ownership breakdown here.
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
