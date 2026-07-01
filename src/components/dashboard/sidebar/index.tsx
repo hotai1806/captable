@@ -15,6 +15,8 @@ import {
   RiGroup2Line,
   RiHome2Fill,
   RiHome2Line,
+  RiRocket2Fill,
+  RiRocket2Line,
   RiListCheck3,
   RiListIndefinite,
   RiMailSendFill,
@@ -50,6 +52,12 @@ const navigation = [
     href: "/",
     icon: RiHome2Line,
     activeIcon: RiHome2Fill,
+  },
+  {
+    name: "Launch dashboard",
+    href: "/launch-dashboard",
+    icon: RiRocket2Line,
+    activeIcon: RiRocket2Fill,
   },
   {
     name: "Cap table",
