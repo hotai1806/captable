@@ -1,0 +1,1450 @@
+// =============================================================================
+// Captable + Wefunder-style Crowdfunding — dbdiagram.io schema
+// =============================================================================
+// How to use:
+//   1. Go to https://dbdiagram.io/d
+//   2. Create a new diagram, then Import > DBML, or paste this file's
+//      contents directly into the editor.
+//
+// This file is a 1:1 conversion of prisma/schema.prisma (Postgres types,
+// relations, unique constraints and indexes) into DBML. Table groups mirror
+// the domains of the app: Auth, CapTable, DocumentsAndESign, Billing, and
+// Crowdfunding (the Wefunder-style layer).
+// =============================================================================
+
+Project captable_crowdfunding {
+  database_type: 'PostgreSQL'
+  Note: 'Captable cap-table platform + Wefunder-style equity crowdfunding layer'
+}
+
+// -----------------------------------------------------------------------------
+// Enums
+// -----------------------------------------------------------------------------
+
+Enum CredentialDeviceTypeEnum {
+  SINGLE_DEVICE
+  MULTI_DEVICE
+}
+
+Enum BankAccountTypeEnum {
+  CHECKING
+  SAVINGS
+}
+
+Enum MemberStatusEnum {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+Enum Roles {
+  ADMIN
+  CUSTOM
+}
+
+Enum StakeholderTypeEnum {
+  INDIVIDUAL
+  INSTITUTION
+}
+
+Enum StakeholderRelationshipEnum {
+  ADVISOR
+  BOARD_MEMBER
+  CONSULTANT
+  EMPLOYEE
+  EX_ADVISOR
+  EX_CONSULTANT
+  EX_EMPLOYEE
+  EXECUTIVE
+  FOUNDER
+  INVESTOR
+  NON_US_EMPLOYEE
+  OFFICER
+  OTHER
+}
+
+Enum ShareTypeEnum {
+  COMMON
+  PREFERRED
+}
+
+Enum SharePrefixEnum {
+  CS [note: 'Common Shares']
+  PS [note: 'Preferred Shares']
+}
+
+Enum ConversionRightsEnum {
+  CONVERTS_TO_FUTURE_ROUND
+  CONVERTS_TO_SHARE_CLASS_ID
+}
+
+Enum CancellationBehaviorEnum {
+  RETIRE
+  RETURN_TO_POOL
+  HOLD_AS_CAPITAL_STOCK
+  DEFINED_PER_PLAN_SECURITY
+}
+
+Enum FieldTypes {
+  TEXT
+  RADIO
+  EMAIL
+  DATE
+  DATETIME
+  TEXTAREA
+  CHECKBOX
+  SIGNATURE
+  SELECT
+}
+
+Enum TemplateStatus {
+  DRAFT
+  COMPLETE
+  PENDING
+  CANCELLED
+}
+
+Enum EsignRecipientStatus {
+  SENT
+  SIGNED
+  PENDING
+}
+
+Enum SecuritiesStatusEnum {
+  ACTIVE
+  DRAFT
+  SIGNED
+  PENDING
+}
+
+Enum ShareLegendsEnum {
+  US_SECURITIES_ACT [note: 'US Securities Act of 1933']
+  SALE_AND_ROFR [note: 'Sale and Right of first refusal']
+  TRANSFER_RESTRICTIONS [note: 'Bylaw transfer restrictions']
+}
+
+Enum OptionTypeEnum {
+  ISO [note: 'Incentive Stock Options']
+  NSO [note: 'Non-statutory Stock Options']
+  RSU [note: 'Restricted Stock Units']
+}
+
+Enum OptionStatusEnum {
+  DRAFT
+  ACTIVE
+  EXERCISED
+  EXPIRED
+  CANCELLED
+}
+
+Enum SafeTypeEnum {
+  PRE_MONEY
+  POST_MONEY
+}
+
+Enum SafeStatusEnum {
+  DRAFT
+  ACTIVE
+  PENDING
+  CONVERTED [note: 'converted into equity at a subsequent priced round']
+  EXPIRED
+  CANCELLED
+}
+
+// YC Standard Safe templates (@map'd to human readable labels in Prisma)
+Enum SafeTemplateEnum {
+  POST_MONEY_CAP [note: 'Valuation Cap, no Discount']
+  POST_MONEY_DISCOUNT [note: 'Discount, no Valuation Cap']
+  POST_MONEY_MFN [note: 'MFN, no Valuation Cap, no Discount']
+  POST_MONEY_CAP_WITH_PRO_RATA [note: 'Valuation Cap, no Discount, include Pro Rata Rights']
+  POST_MONEY_DISCOUNT_WITH_PRO_RATA [note: 'Discount, no Valuation Cap, include Pro Rata Rights']
+  POST_MONEY_MFN_WITH_PRO_RATA [note: 'MFN, no Valuation Cap, no Discount, include Pro Rata Rights']
+  CUSTOM
+}
+
+Enum ConvertibleStatusEnum {
+  DRAFT
+  ACTIVE
+  PENDING
+  CONVERTED [note: 'converted into equity at a subsequent priced round']
+  MATURED [note: 'reached maturityDate without converting; awaiting repayment/extension']
+  EXPIRED
+  CANCELLED
+}
+
+Enum ConvertibleTypeEnum {
+  CCD [note: 'Compulsory Convertible Debenture']
+  OCD [note: 'Optionally Convertible Debenture']
+  NOTE [note: 'Simple Convertible note']
+}
+
+Enum ConvertibleInterestMethodEnum {
+  SIMPLE
+  COMPOUND
+}
+
+Enum ConvertibleInterestAccrualEnum {
+  DAILY
+  MONTHLY
+  SEMI_ANNUALLY
+  ANNUALLY
+  YEARLY
+  CONTINUOUSLY
+}
+
+Enum ConvertibleInterestPaymentScheduleEnum {
+  DEFERRED
+  PAY_AT_MATURITY
+}
+
+Enum UpdateStatusEnum {
+  DRAFT
+  PUBLIC
+  PRIVATE
+}
+
+Enum PricingType {
+  one_time
+  recurring
+}
+
+Enum PricingPlanInterval {
+  day
+  week
+  month
+  year
+}
+
+Enum SubscriptionStatus {
+  trialing
+  active
+  canceled
+  incomplete
+  incomplete_expired
+  past_due
+  unpaid
+  paused
+}
+
+Enum AccessTokenType {
+  sig [note: 'Signature token']
+  doc [note: 'Data room token']
+  api [note: 'API access token']
+  upd [note: 'Investor update token']
+}
+
+Enum InvestorEntityTypeEnum {
+  INDIVIDUAL
+  LLC
+  CORPORATION
+  PARTNERSHIP
+  TRUST
+  IRA
+}
+
+Enum KycStatusEnum {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+Enum AccreditationStatusEnum {
+  NOT_ACCREDITED
+  SELF_REPORTED
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+Enum CampaignStatusEnum {
+  DRAFT [note: 'being prepared by the founder']
+  IN_REVIEW [note: 'compliance / platform review']
+  TESTING_THE_WATERS [note: 'Reg CF "TTW" - non-binding indications of interest']
+  LIVE [note: 'accepting investments']
+  FUNDED [note: 'hit its goal, still accepting until deadline']
+  CLOSED [note: 'final close completed, funds disbursed']
+  CANCELLED [note: 'withdrawn before closing; commitments refunded']
+  FAILED [note: 'deadline passed below minimum goal; commitments refunded']
+}
+
+Enum RegulationTypeEnum {
+  REG_CF [note: 'Regulation Crowdfunding (up to $5M / 12 months)']
+  REG_D_506B [note: 'accredited only, no general solicitation']
+  REG_D_506C [note: 'accredited only, general solicitation allowed']
+  REG_A_PLUS [note: 'Regulation A+ (up to $75M)']
+}
+
+Enum CampaignSecurityTypeEnum {
+  SAFE
+  PRICED_EQUITY [note: 'priced round, common or preferred stock']
+  CONVERTIBLE_NOTE
+  REVENUE_SHARE
+  DEBT
+}
+
+Enum EscrowProviderEnum {
+  BANK_TRUST [note: 'eg. Thread Bank / Evolve']
+  BROKER_DEALER
+  OTHER
+}
+
+Enum CommitmentStatusEnum {
+  PENDING [note: 'created, payment not yet collected']
+  PAYMENT_PROCESSING [note: 'charge initiated (ACH can take days)']
+  ESCROWED [note: 'funds received into escrow']
+  RECONFIRMATION_REQUIRED [note: 'material change to offering; investor must reconfirm']
+  CANCELLED [note: 'investor cancelled (allowed until 48h before close)']
+  REFUNDED [note: 'funds returned (failed campaign, cancellation, or rejection)']
+  COMPLETED [note: 'included in a close; securities issued']
+}
+
+Enum PaymentMethodEnum {
+  ACH
+  WIRE
+  CARD
+  CHECK
+}
+
+Enum PaymentTransactionTypeEnum {
+  CHARGE [note: 'investor -> escrow']
+  REFUND [note: 'escrow -> investor']
+  DISBURSEMENT [note: 'escrow -> company (at a close)']
+  FEE [note: 'platform fee taken at disbursement']
+}
+
+Enum PaymentTransactionStatusEnum {
+  INITIATED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REVERSED
+}
+
+Enum CampaignCloseStatusEnum {
+  SCHEDULED
+  DISBURSING
+  COMPLETED
+  CANCELLED
+}
+
+// -----------------------------------------------------------------------------
+// Auth (NextAuth + passkeys)
+// -----------------------------------------------------------------------------
+
+Table Account {
+  id varchar [pk]
+  userId varchar [not null, ref: > User.id]
+  type varchar [not null]
+  provider varchar [not null]
+  providerAccountId varchar [not null]
+  refresh_token text
+  access_token text
+  expires_at integer
+  token_type varchar
+  scope varchar
+  id_token text
+  session_state varchar
+
+  indexes {
+    (provider, providerAccountId) [unique]
+    (userId)
+  }
+}
+
+Table Session {
+  id varchar [pk]
+  sessionToken varchar [unique, not null]
+  userId varchar [not null, ref: > User.id]
+  expires timestamp [not null]
+
+  indexes {
+    (userId)
+  }
+}
+
+Table User {
+  id varchar [pk]
+  name varchar
+  email varchar [unique]
+  password varchar
+  emailVerified timestamp
+  image varchar
+  lastSignedIn timestamp [not null, default: `now()`]
+  identityProvider varchar
+}
+
+Table Passkey {
+  id varchar [pk]
+  name varchar [not null]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null, default: `now()`]
+  lastUsedAt timestamp
+  credentialId bytea [not null]
+  credentialPublicKey bytea [not null]
+  counter bigint [not null]
+  credentialDeviceType CredentialDeviceTypeEnum [not null]
+  credentialBackedUp boolean [not null]
+  transports "varchar[]" [not null]
+  userId varchar [not null, ref: > User.id]
+
+  indexes {
+    (userId)
+  }
+}
+
+Table PasskeyVerificationToken {
+  id varchar [pk]
+  token varchar [unique, not null]
+  expiresAt timestamp [not null]
+  createdAt timestamp [not null, default: `now()`]
+}
+
+Table VerificationToken {
+  id integer [pk, increment]
+  secondaryId varchar [unique, not null]
+  identifier varchar [not null]
+  token varchar [unique, not null]
+  expires timestamp [not null]
+  createdAt timestamp [not null, default: `now()`]
+  userId varchar [ref: > User.id]
+
+  indexes {
+    (identifier, token) [unique]
+    (userId)
+  }
+}
+
+Table PasswordResetToken {
+  id varchar [pk]
+  email varchar [not null]
+  token varchar [unique, not null]
+  expires timestamp [not null]
+
+  indexes {
+    (email, token) [unique]
+  }
+}
+
+Table AccessToken {
+  id varchar [pk]
+  active boolean [not null, default: true]
+  clientId varchar [not null]
+  clientSecret varchar [not null, note: 'Hashed with scrypt']
+  typeEnum AccessTokenType [not null, default: 'api']
+  userId varchar [not null, ref: > User.id]
+  expiresAt timestamp
+  lastUsed timestamp
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (userId)
+    (typeEnum, clientId)
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Cap table (Company, Stakeholders, Securities)
+// -----------------------------------------------------------------------------
+
+Table Company {
+  id varchar [pk]
+  name varchar [not null]
+  logo varchar
+  publicId varchar [unique, not null]
+  website varchar
+  incorporationType varchar [not null]
+  incorporationDate timestamp [not null]
+  incorporationCountry varchar [not null]
+  incorporationState varchar [not null]
+  streetAddress varchar [not null]
+  city varchar [not null]
+  state varchar [not null]
+  zipcode varchar [not null]
+  country varchar [not null]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table BankAccount {
+  id varchar [pk]
+  beneficiaryName varchar [not null]
+  beneficiaryAddress varchar [not null]
+  bankName varchar [not null]
+  bankAddress varchar [not null]
+  accountNumber varchar [not null, note: 'iban or account number']
+  routingNumber varchar [not null, note: 'ABA or routing number']
+  accountType BankAccountTypeEnum [not null, default: 'CHECKING']
+  swiftCode varchar [note: 'BIC or SWIFT code']
+  "primary" boolean [not null, default: false]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+  companyId varchar [not null, ref: > Company.id]
+
+  indexes {
+    (companyId, accountNumber) [unique]
+    (companyId, "primary") [unique, name: "unique_primary_account"]
+    (companyId)
+  }
+}
+
+Table Member {
+  id varchar [pk]
+  title varchar
+  status MemberStatusEnum [not null, default: 'PENDING']
+  isOnboarded boolean [not null, default: false]
+  role Roles [default: 'ADMIN']
+  workEmail varchar
+  lastAccessed timestamp [not null, default: `now()`]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+  userId varchar [not null, ref: > User.id]
+  companyId varchar [not null, ref: > Company.id]
+  customRoleId varchar [ref: > CustomRole.id]
+
+  indexes {
+    (companyId, userId) [unique]
+    (companyId)
+    (status)
+    (userId)
+    (customRoleId)
+  }
+}
+
+Table CustomRole {
+  id varchar [pk]
+  name varchar [not null]
+  companyId varchar [not null, ref: > Company.id]
+  permissions "jsonb[]" [not null]
+
+  indexes {
+    (companyId)
+  }
+}
+
+Table Stakeholder {
+  id varchar [pk]
+  name varchar [not null]
+  email varchar [unique, not null]
+  institutionName varchar
+  stakeholderType StakeholderTypeEnum [not null, default: 'INDIVIDUAL']
+  currentRelationship StakeholderRelationshipEnum [not null, default: 'EMPLOYEE']
+  taxId varchar
+  streetAddress varchar
+  city varchar
+  state varchar
+  zipcode varchar
+  country varchar [not null, default: 'US']
+  companyId varchar [not null, ref: > Company.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId)
+  }
+}
+
+Table Audit {
+  id varchar [pk]
+  companyId varchar [not null, ref: > Company.id]
+  summary varchar
+  action varchar [not null]
+  occurredAt timestamp [not null, default: `now()`]
+  actor jsonb [not null]
+  target "jsonb[]" [not null]
+  context jsonb [not null]
+
+  indexes {
+    (companyId)
+  }
+}
+
+// Based on the Open Cap Format (OCF) StockClass object
+Table ShareClass {
+  id varchar [pk]
+  idx integer [not null, note: 'auto-incremented per company']
+  name varchar [not null]
+  classType ShareTypeEnum [not null, default: 'COMMON']
+  prefix SharePrefixEnum [not null, default: 'CS']
+  initialSharesAuthorized bigint [not null]
+  boardApprovalDate timestamp [not null]
+  stockholderApprovalDate timestamp [not null]
+  votesPerShare integer [not null]
+  parValue float [not null]
+  pricePerShare float [not null]
+  seniority integer [not null]
+  conversionRights ConversionRightsEnum [not null, default: 'CONVERTS_TO_FUTURE_ROUND']
+  convertsToShareClassId varchar
+  liquidationPreferenceMultiple float [not null]
+  participationCapMultiple float [not null]
+  companyId varchar [not null, ref: > Company.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId, idx) [unique]
+    (companyId)
+  }
+}
+
+Table EquityPlan {
+  id varchar [pk]
+  name varchar [not null]
+  boardApprovalDate timestamp [not null]
+  planEffectiveDate timestamp
+  initialSharesReserved bigint [not null]
+  defaultCancellatonBehavior CancellationBehaviorEnum [not null]
+  comments varchar
+  companyId varchar [not null, ref: > Company.id]
+  shareClassId varchar [not null, ref: > ShareClass.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (shareClassId)
+    (companyId)
+  }
+}
+
+Table Share {
+  id varchar [pk]
+  status SecuritiesStatusEnum [not null, default: 'DRAFT']
+  certificateId varchar [not null]
+  quantity integer [not null, note: 'Number of shares']
+  pricePerShare float
+  capitalContribution float [note: 'Total amount of money contributed/invested']
+  ipContribution float [note: 'Value of the intellectual property contributed']
+  debtCancelled float [note: 'Amount of debt cancelled']
+  otherContributions float
+  cliffYears integer [not null, default: 0]
+  vestingYears integer [not null, default: 0]
+  companyLegends "ShareLegendsEnum[]" [not null, default: '[]']
+  issueDate timestamp [not null]
+  rule144Date timestamp
+  vestingStartDate timestamp
+  boardApprovalDate timestamp [not null]
+  stakeholderId varchar [not null, ref: > Stakeholder.id]
+  companyId varchar [not null, ref: > Company.id]
+  shareClassId varchar [not null, ref: > ShareClass.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId, certificateId) [unique]
+    (companyId)
+    (shareClassId)
+    (stakeholderId)
+  }
+}
+
+Table Option {
+  id varchar [pk]
+  grantId varchar [not null]
+  quantity integer [not null]
+  exercisePrice float [not null]
+  type OptionTypeEnum [not null]
+  status OptionStatusEnum [not null, default: 'DRAFT']
+  cliffYears integer [not null, default: 0]
+  vestingYears integer [not null, default: 0]
+  issueDate timestamp [not null]
+  expirationDate timestamp [not null]
+  vestingStartDate timestamp [not null]
+  boardApprovalDate timestamp [not null]
+  rule144Date timestamp [not null]
+  stakeholderId varchar [not null, ref: > Stakeholder.id]
+  companyId varchar [not null, ref: > Company.id]
+  equityPlanId varchar [not null, ref: > EquityPlan.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId, grantId) [unique]
+    (companyId)
+    (equityPlanId)
+    (stakeholderId)
+  }
+}
+
+Table Investment {
+  id varchar [pk]
+  amount float [not null, note: 'Amount of money invested']
+  shares bigint [not null, note: 'Number of shares issued at time of investment']
+  date timestamp [not null]
+  comments varchar
+  shareClassId varchar [not null, ref: > ShareClass.id]
+  companyId varchar [not null, ref: > Company.id]
+  stakeholderId varchar [not null, ref: > Stakeholder.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId)
+    (stakeholderId)
+    (shareClassId)
+  }
+}
+
+Table Safe {
+  id varchar [pk]
+  publicId varchar [not null, note: 'eg. SAFE-01']
+  type SafeTypeEnum [not null, default: 'POST_MONEY']
+  status SafeStatusEnum [not null, default: 'DRAFT']
+  capital float [not null]
+  safeTemplate SafeTemplateEnum
+  safeId varchar
+  valuationCap float
+  discountRate float
+  mfn boolean [not null, default: false, note: 'Most Favored Nation']
+  proRata boolean [not null, default: false]
+  additionalTerms varchar
+  convertedAt timestamp [note: 'set once this SAFE converts into equity at a priced round']
+  convertedToShareId varchar [unique, ref: - Share.id]
+  stakeholderId varchar [not null, ref: > Stakeholder.id]
+  companyId varchar [not null, ref: > Company.id]
+  issueDate timestamp [not null]
+  boardApprovalDate timestamp [not null]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (publicId, companyId) [unique]
+    (companyId)
+    (stakeholderId)
+  }
+}
+
+Table ConvertibleNote {
+  id varchar [pk]
+  publicId varchar [not null, note: 'eg. CN-01']
+  status ConvertibleStatusEnum [not null, default: 'DRAFT']
+  type ConvertibleTypeEnum [not null, default: 'NOTE']
+  capital float [not null]
+  conversionCap float
+  discountRate float
+  mfn boolean
+  additionalTerms varchar
+  interestRate float
+  interestMethod ConvertibleInterestMethodEnum
+  interestAccrual ConvertibleInterestAccrualEnum
+  interestPaymentSchedule ConvertibleInterestPaymentScheduleEnum
+  maturityDate timestamp [note: 'note converts or becomes due for repayment/extension on this date']
+  convertedAt timestamp [note: 'set once this note converts into equity at a priced round']
+  convertedToShareId varchar [unique, ref: - Share.id]
+  stakeholderId varchar [not null, ref: > Stakeholder.id]
+  companyId varchar [not null, ref: > Company.id]
+  issueDate timestamp [not null]
+  boardApprovalDate timestamp [not null]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (publicId, companyId) [unique]
+    (companyId)
+    (stakeholderId)
+  }
+}
+
+Table Update {
+  id varchar [pk]
+  publicId varchar [unique, not null]
+  title varchar [not null]
+  content jsonb [not null]
+  html varchar [not null]
+  public boolean [not null, default: false]
+  status UpdateStatusEnum [not null, default: 'DRAFT']
+  authorId varchar [not null, ref: > Member.id]
+  companyId varchar [not null, ref: > Company.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (publicId)
+    (authorId)
+    (companyId)
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Documents, eSign, and Data Rooms
+// -----------------------------------------------------------------------------
+
+Table Bucket {
+  id varchar [pk]
+  name varchar [not null]
+  key varchar [not null]
+  mimeType varchar [not null]
+  size integer [not null]
+  tags "varchar[]" [not null]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table Document {
+  id varchar [pk]
+  publicId varchar [unique, not null]
+  name varchar [not null]
+  bucketId varchar [not null, ref: > Bucket.id]
+  uploaderId varchar [ref: > Member.id]
+  companyId varchar [not null, ref: > Company.id]
+  shareId varchar [ref: > Share.id]
+  optionId varchar [ref: > Option.id]
+  safeId varchar [ref: > Safe.id]
+  convertibleNoteId varchar [ref: > ConvertibleNote.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (bucketId)
+    (uploaderId)
+    (companyId)
+    (shareId)
+    (optionId)
+    (safeId)
+    (convertibleNoteId)
+  }
+}
+
+Table DataRoom {
+  id varchar [pk]
+  name varchar [not null]
+  publicId varchar [unique, not null]
+  public boolean [not null, default: false]
+  companyId varchar [not null, ref: > Company.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId, name) [unique]
+    (publicId)
+    (companyId)
+  }
+}
+
+Table DataRoomDocument {
+  id varchar [pk]
+  dataRoomId varchar [not null, ref: > DataRoom.id]
+  documentId varchar [not null, ref: > Document.id]
+  createdAt timestamp [not null, default: `now()`]
+
+  indexes {
+    (dataRoomId, documentId) [unique]
+    (dataRoomId)
+    (documentId)
+  }
+}
+
+Table DataRoomRecipient {
+  id varchar [pk]
+  name varchar
+  email varchar [not null]
+  dataRoomId varchar [not null, ref: > DataRoom.id]
+  memberId varchar [ref: > Member.id]
+  stakeholderId varchar [ref: > Stakeholder.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (dataRoomId, email) [unique]
+    (id, dataRoomId)
+    (memberId)
+    (dataRoomId)
+    (stakeholderId)
+  }
+}
+
+Table UpdateRecipient {
+  id varchar [pk]
+  name varchar
+  email varchar [not null]
+  updateId varchar [not null, ref: > Update.id]
+  memberId varchar [ref: > Member.id]
+  stakeholderId varchar [ref: > Stakeholder.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (updateId, email) [unique]
+    (id, updateId)
+    (memberId)
+    (updateId)
+    (stakeholderId)
+  }
+}
+
+Table DocumentShare {
+  id varchar [pk]
+  link varchar [not null]
+  publicId varchar [not null]
+  linkExpiresAt timestamp [not null]
+  recipients "varchar[]" [not null, default: '[]']
+  emailProtected boolean [not null, default: false]
+  documentId varchar [not null, ref: > Document.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (documentId)
+  }
+}
+
+Table TemplateField {
+  id varchar [pk]
+  name varchar [not null]
+  type FieldTypes [not null, default: 'TEXT']
+  defaultValue varchar [not null, default: '']
+  readOnly boolean [not null, default: false]
+  required boolean [not null, default: false]
+  prefilledValue varchar
+  top integer [not null]
+  left integer [not null]
+  width integer [not null]
+  height integer [not null]
+  recipientId varchar [not null, ref: > EsignRecipient.id]
+  templateId varchar [not null, ref: > Template.id]
+  viewportHeight integer [not null]
+  viewportWidth integer [not null]
+  page integer [not null]
+  meta jsonb [not null, default: '{}']
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (templateId)
+    (recipientId)
+  }
+}
+
+Table Template {
+  id varchar [pk]
+  publicId varchar [not null]
+  name varchar [not null]
+  status TemplateStatus [not null, default: 'DRAFT']
+  orderedDelivery boolean [not null, default: false]
+  message varchar
+  bucketId varchar [not null, ref: > Bucket.id]
+  uploaderId varchar [not null, ref: > Member.id]
+  companyId varchar [not null, ref: > Company.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+  completedOn timestamp
+
+  indexes {
+    (bucketId)
+    (uploaderId)
+    (companyId)
+  }
+}
+
+Table EsignRecipient {
+  id varchar [pk]
+  email varchar [not null]
+  name varchar
+  templateId varchar [not null, ref: > Template.id]
+  status EsignRecipientStatus [not null, default: 'PENDING']
+  memberId varchar [ref: > Member.id]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (memberId)
+    (templateId)
+  }
+}
+
+Table EsignAudit {
+  id varchar [pk]
+  companyId varchar [not null, ref: > Company.id]
+  templateId varchar [not null, ref: > Template.id]
+  recipientId varchar [ref: > EsignRecipient.id]
+  action varchar [not null]
+  ip varchar [not null]
+  userAgent varchar [not null]
+  location varchar [not null]
+  summary varchar [not null]
+  occurredAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId)
+    (templateId)
+    (recipientId)
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Billing (Stripe sync)
+// -----------------------------------------------------------------------------
+
+Table BillingProduct {
+  id varchar [pk, note: 'Product ID from Stripe, e.g. prod_1234']
+  active boolean [not null]
+  name varchar [not null]
+  description varchar
+  metadata jsonb
+}
+
+Table BillingPrice {
+  id varchar [pk, note: 'Price ID from Stripe, e.g. price_1234']
+  productId varchar [not null, ref: > BillingProduct.id]
+  active boolean [not null]
+  description varchar
+  unitAmount bigint
+  currency char(3) [not null]
+  type PricingType [not null]
+  interval PricingPlanInterval
+  intervalCount integer
+  trialPeriodDays integer
+  metadata jsonb
+
+  indexes {
+    (productId)
+  }
+}
+
+Table BillingSubscription {
+  id varchar [pk, note: 'Subscription ID from Stripe, e.g. sub_1234']
+  priceId varchar [not null, ref: > BillingPrice.id]
+  quantity integer [not null]
+  status SubscriptionStatus [not null]
+  cancelAtPeriodEnd boolean [not null]
+  created timestamp [not null, default: `now()`]
+  currentPeriodStart timestamp [not null, default: `now()`]
+  currentPeriodEnd timestamp [not null, default: `now()`]
+  endedAt timestamp
+  cancelAt timestamp
+  canceledAt timestamp
+  trialStart timestamp
+  trialEnd timestamp
+  metadata jsonb
+  customerId varchar [not null, ref: > BillingCustomer.id]
+
+  indexes {
+    (priceId)
+    (customerId)
+  }
+}
+
+Table BillingCustomer {
+  id varchar [pk]
+  companyId varchar [ref: > Company.id]
+
+  indexes {
+    (companyId)
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Crowdfunding (Wefunder-style equity crowdfunding layer)
+// -----------------------------------------------------------------------------
+
+Table InvestorProfile {
+  id varchar [pk]
+  publicId varchar [unique, not null]
+  userId varchar [unique, not null, ref: - User.id]
+  entityType InvestorEntityTypeEnum [not null, default: 'INDIVIDUAL']
+  entityName varchar [note: 'required when entityType != INDIVIDUAL']
+  firstName varchar [not null]
+  lastName varchar [not null]
+  dateOfBirth timestamp
+  phone varchar
+  streetAddress varchar
+  city varchar
+  state varchar
+  zipcode varchar
+  country varchar [not null, default: 'US']
+  taxIdToken varchar [note: 'SSN/EIN, encrypted or tokenized, never plaintext']
+  annualIncome decimal(15,2)
+  netWorth decimal(15,2)
+  kycStatus KycStatusEnum [not null, default: 'NOT_STARTED']
+  kycVerifiedAt timestamp
+  kycProviderReference varchar [note: 'eg. Persona / Plaid IDV inquiry id']
+  accreditationStatus AccreditationStatusEnum [not null, default: 'NOT_ACCREDITED']
+  accreditationVerifiedAt timestamp
+  accreditationExpiresAt timestamp
+  paymentCustomerReference varchar [note: 'Stripe customer / ACH source id']
+  bio varchar
+  isPublic boolean [not null, default: false, note: 'show name publicly on campaign pages']
+  image varchar
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (userId)
+    (kycStatus)
+    (accreditationStatus)
+  }
+}
+
+Table FounderProfile {
+  id varchar [pk]
+  companyId varchar [not null, ref: > Company.id]
+  name varchar [not null]
+  title varchar [not null, note: 'eg. CEO, CTO']
+  bio varchar
+  image varchar
+  email varchar
+  linkedin varchar
+  twitter varchar
+  displayOrder integer [not null, default: 0]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId)
+  }
+}
+
+Table Campaign {
+  id varchar [pk]
+  publicId varchar [unique, not null]
+  slug varchar [unique, not null, note: 'eg. acme-robotics']
+  companyId varchar [not null, ref: > Company.id]
+  status CampaignStatusEnum [not null, default: 'DRAFT']
+  regulationType RegulationTypeEnum [not null, default: 'REG_CF']
+  securityType CampaignSecurityTypeEnum [not null, default: 'SAFE']
+  title varchar [not null]
+  tagline varchar
+  coverImage varchar
+  videoUrl varchar
+  pitch jsonb [not null, default: '{}', note: 'structured pitch sections (problem, solution, traction, etc.)']
+  highlights jsonb [not null, default: '[]']
+  risks varchar [note: 'required risk disclosures']
+  minimumGoal decimal(15,2) [not null, note: 'must be reached or all funds are refunded']
+  maximumGoal decimal(15,2) [not null, note: 'hard cap (eg. $5M for Reg CF)']
+  minInvestment decimal(15,2) [not null, default: 100]
+  maxInvestment decimal(15,2)
+  valuationCap decimal(18,2)
+  discountRate float [note: 'percentage, eg. 20 = 20%']
+  interestRate float
+  maturityDate timestamp
+  pricePerShare decimal(15,6)
+  preMoneyValuation decimal(18,2)
+  revenueSharePercent float
+  revenueShareCapMultiple float [note: 'eg. 2.0 = investors repaid up to 2x']
+  amountCommitted decimal(15,2) [not null, default: 0]
+  amountEscrowed decimal(15,2) [not null, default: 0]
+  amountDisbursed decimal(15,2) [not null, default: 0]
+  investorCount integer [not null, default: 0]
+  launchedAt timestamp
+  deadline timestamp
+  closedAt timestamp
+  formCFiledAt timestamp [note: 'SEC Form C filing date (Reg CF)']
+  secFileNumber varchar
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (companyId)
+    (status)
+    (status, launchedAt)
+  }
+}
+
+Table CampaignCategory {
+  id varchar [pk]
+  name varchar [unique, not null, note: 'eg. AI, Fintech, Consumer']
+  slug varchar [unique, not null]
+}
+
+Table CampaignToCategory {
+  campaignId varchar [not null, ref: > Campaign.id]
+  categoryId varchar [not null, ref: > CampaignCategory.id]
+
+  indexes {
+    (campaignId, categoryId) [pk]
+    (campaignId)
+    (categoryId)
+  }
+}
+
+Table CampaignPerk {
+  id varchar [pk]
+  campaignId varchar [not null, ref: > Campaign.id]
+  title varchar [not null, note: 'eg. Early Bird']
+  description varchar [not null]
+  minimumAmount decimal(15,2) [not null, note: 'invest at least this much to unlock']
+  quantityLimit integer [note: 'null = unlimited']
+  claimedCount integer [not null, default: 0]
+  displayOrder integer [not null, default: 0]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId)
+  }
+}
+
+Table CampaignFaq {
+  id varchar [pk]
+  campaignId varchar [not null, ref: > Campaign.id]
+  question varchar [not null]
+  answer varchar [not null]
+  displayOrder integer [not null, default: 0]
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId)
+  }
+}
+
+Table CampaignUpdate {
+  id varchar [pk]
+  publicId varchar [unique, not null]
+  campaignId varchar [not null, ref: > Campaign.id]
+  title varchar [not null]
+  content jsonb [not null]
+  html varchar [not null]
+  investorsOnly boolean [not null, default: false, note: 'hidden from the public pitch page']
+  publishedAt timestamp
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId)
+    (campaignId, publishedAt)
+  }
+}
+
+Table CampaignComment {
+  id varchar [pk]
+  campaignId varchar [not null, ref: > Campaign.id]
+  authorId varchar [not null, ref: > User.id]
+  parentId varchar [ref: > CampaignComment.id, note: 'top-level comments have parentId = null']
+  body varchar [not null]
+  isFounderResponse boolean [not null, default: false]
+  isInvestor boolean [not null, default: false, note: 'author had a commitment at post time']
+  likeCount integer [not null, default: 0]
+  deletedAt timestamp [note: 'soft delete keeps thread structure intact']
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId, createdAt)
+    (authorId)
+    (parentId)
+  }
+}
+
+Table CampaignCommentLike {
+  commentId varchar [not null, ref: > CampaignComment.id]
+  userId varchar [not null, ref: > User.id]
+  createdAt timestamp [not null, default: `now()`]
+
+  indexes {
+    (commentId, userId) [pk]
+    (commentId)
+    (userId)
+  }
+}
+
+Table CampaignFollow {
+  campaignId varchar [not null, ref: > Campaign.id]
+  userId varchar [not null, ref: > User.id]
+  indicatedAmount decimal(15,2) [note: 'non-binding TTW indication of interest']
+  createdAt timestamp [not null, default: `now()`]
+
+  indexes {
+    (campaignId, userId) [pk]
+    (campaignId)
+    (userId)
+  }
+}
+
+Table LeadInvestor {
+  id varchar [pk]
+  campaignId varchar [not null, ref: > Campaign.id]
+  investorProfileId varchar [not null, ref: > InvestorProfile.id]
+  memo varchar [note: 'why I invested']
+  carryPercent float [note: 'lead carried interest in the SPV, eg. 5 = 5%']
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId, investorProfileId) [unique]
+    (campaignId)
+    (investorProfileId)
+  }
+}
+
+Table Spv {
+  id varchar [pk]
+  campaignId varchar [unique, not null, ref: - Campaign.id]
+  legalName varchar [not null, note: 'eg. Wefunder SPV LLC - Series Acme']
+  ein varchar
+  jurisdiction varchar [not null, default: 'DE']
+  managementFeePercent float
+  carryPercent float
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table EscrowAccount {
+  id varchar [pk]
+  campaignId varchar [unique, not null, ref: - Campaign.id]
+  provider EscrowProviderEnum [not null, default: 'BANK_TRUST']
+  providerReference varchar [not null, note: 'account id at the escrow agent']
+  balance decimal(15,2) [not null, default: 0]
+  openedAt timestamp [not null, default: `now()`]
+  closedAt timestamp
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+}
+
+Table InvestmentCommitment {
+  id varchar [pk]
+  publicId varchar [unique, not null, note: 'eg. INV-000123, shown on receipts']
+  campaignId varchar [not null, ref: > Campaign.id]
+  investorProfileId varchar [not null, ref: > InvestorProfile.id]
+  status CommitmentStatusEnum [not null, default: 'PENDING']
+  amount decimal(15,2) [not null]
+  paymentMethod PaymentMethodEnum [not null, default: 'ACH']
+  perkId varchar [ref: > CampaignPerk.id]
+  termsSnapshot jsonb [not null, default: '{}', note: 'frozen copy of offering terms at commitment time']
+  closeId varchar [ref: > CampaignClose.id]
+  stakeholderId varchar [ref: > Stakeholder.id, note: 'Stakeholder created for this investor once securities issue']
+  issuedSafeId varchar [unique, ref: > Safe.id, note: 'set for SAFE campaigns once completed']
+  issuedConvertibleNoteId varchar [unique, ref: > ConvertibleNote.id, note: 'set for convertible-note campaigns once completed']
+  issuedShareId varchar [unique, ref: > Share.id, note: 'set for priced-equity campaigns once completed']
+  educationalMaterialsAcceptedAt timestamp
+  cancellationTermsAcceptedAt timestamp
+  riskAcknowledgedAt timestamp
+  agreementTemplateId varchar [ref: > Template.id, note: 'subscription / SAFE / note e-sign envelope']
+  cancelledAt timestamp
+  refundedAt timestamp
+  escrowedAt timestamp
+  completedAt timestamp
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId)
+    (campaignId, status)
+    (investorProfileId)
+    (perkId)
+    (closeId)
+    (stakeholderId)
+    (agreementTemplateId)
+  }
+}
+
+Table PaymentTransaction {
+  id varchar [pk]
+  publicId varchar [unique, not null]
+  commitmentId varchar [ref: > InvestmentCommitment.id]
+  escrowAccountId varchar [not null, ref: > EscrowAccount.id]
+  type PaymentTransactionTypeEnum [not null]
+  status PaymentTransactionStatusEnum [not null, default: 'INITIATED']
+  amount decimal(15,2) [not null]
+  currency char(3) [not null, default: 'usd']
+  provider varchar [note: 'eg. stripe, dwolla, wire']
+  providerReference varchar [note: 'charge / transfer id at the provider']
+  failureReason varchar
+  initiatedAt timestamp [not null, default: `now()`]
+  settledAt timestamp
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (commitmentId)
+    (escrowAccountId)
+    (status)
+    (providerReference)
+  }
+}
+
+Table CampaignClose {
+  id varchar [pk]
+  campaignId varchar [not null, ref: > Campaign.id]
+  status CampaignCloseStatusEnum [not null, default: 'SCHEDULED']
+  isFinal boolean [not null, default: false]
+  noticeSentAt timestamp [note: '48-hour notice to investors before a rolling close']
+  scheduledFor timestamp [not null]
+  completedAt timestamp
+  grossAmount decimal(15,2) [not null, default: 0, note: 'sum of commitments in this close']
+  platformFee decimal(15,2) [not null, default: 0]
+  disbursedAmount decimal(15,2) [not null, default: 0, note: 'gross - fees']
+  createdAt timestamp [not null, default: `now()`]
+  updatedAt timestamp [not null]
+
+  indexes {
+    (campaignId)
+    (campaignId, status)
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Table groups (for layout in dbdiagram.io)
+// -----------------------------------------------------------------------------
+
+TableGroup Auth {
+  Account
+  Session
+  User
+  Passkey
+  PasskeyVerificationToken
+  VerificationToken
+  PasswordResetToken
+  AccessToken
+}
+
+TableGroup CapTable {
+  Company
+  BankAccount
+  Member
+  CustomRole
+  Stakeholder
+  Audit
+  ShareClass
+  EquityPlan
+  Share
+  Option
+  Investment
+  Safe
+  ConvertibleNote
+  Update
+}
+
+TableGroup DocumentsAndESign {
+  Bucket
+  Document
+  DataRoom
+  DataRoomDocument
+  DataRoomRecipient
+  UpdateRecipient
+  DocumentShare
+  TemplateField
+  Template
+  EsignRecipient
+  EsignAudit
+}
+
+TableGroup Billing {
+  BillingProduct
+  BillingPrice
+  BillingSubscription
+  BillingCustomer
+}
+
+TableGroup Crowdfunding {
+  InvestorProfile
+  FounderProfile
+  Campaign
+  CampaignCategory
+  CampaignToCategory
+  CampaignPerk
+  CampaignFaq
+  CampaignUpdate
+  CampaignComment
+  CampaignCommentLike
+  CampaignFollow
+  LeadInvestor
+  Spv
+  EscrowAccount
+  InvestmentCommitment
+  PaymentTransaction
+  CampaignClose
+}
