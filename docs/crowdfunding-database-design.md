@@ -102,7 +102,7 @@ commitment stores the acknowledgements.
 
 | Model | Purpose |
 |---|---|
-| `InvestmentCommitment` | The core transactional record: investor + campaign + amount + payment method + status machine. Snapshots the offering terms at commitment time (`termsSnapshot`) so a mid-campaign term change can trigger `RECONFIRMATION_REQUIRED` per Reg CF. Records regulatory acknowledgements, links to the e-sign envelope (`agreementTemplateId → Template`), and — once closed — to the `Stakeholder` under which securities were issued. |
+| `InvestmentCommitment` | The core transactional record: investor + campaign + amount + payment method + status machine. Snapshots the offering terms at commitment time (`termsSnapshot`) so a mid-campaign term change can trigger `RECONFIRMATION_REQUIRED` per Reg CF. Records regulatory acknowledgements, links to the e-sign envelope (`agreementTemplateId → Template`), and — once closed — to the `Stakeholder` under which securities were issued, plus exactly one of `issuedSafeId` / `issuedConvertibleNoteId` / `issuedShareId` depending on the campaign's `securityType`. |
 | `EscrowAccount` | One per campaign; the account at the escrow agent holding funds while the raise is live, with a running balance. |
 | `PaymentTransaction` | Immutable ledger rows against the escrow account: `CHARGE` (investor → escrow), `REFUND`, `DISBURSEMENT` (escrow → company), and `FEE`, with provider references for reconciliation. |
 | `CampaignClose` | A rolling or final close. Reg CF permits disbursing in tranches once the minimum goal is met; each close records the 48-hour notice timestamp, the set of commitments included, gross amount, platform fee, and net disbursement. |
@@ -119,16 +119,67 @@ PENDING ──▶ PAYMENT_PROCESSING ──▶ ESCROWED ──▶ COMPLETED (in 
 ```
 
 On `COMPLETED`, the application issues the actual security through the
-existing cap-table models:
+existing cap-table models, and records the link back on the commitment so
+the two stay traceable in both directions:
 
 - **SAFE campaigns** → a `Safe` row for the investor's (or the SPV's)
-  `Stakeholder`.
-- **Convertible note campaigns** → a `ConvertibleNote` row.
-- **Priced rounds** → `Share` rows against a `ShareClass`.
+  `Stakeholder`; `InvestmentCommitment.issuedSafeId` is set.
+- **Convertible note campaigns** → a `ConvertibleNote` row;
+  `InvestmentCommitment.issuedConvertibleNoteId` is set.
+- **Priced rounds** → a `Share` row against a `ShareClass`;
+  `InvestmentCommitment.issuedShareId` is set.
+
+`issuedSafeId` / `issuedConvertibleNoteId` / `issuedShareId` are each unique
+on `InvestmentCommitment`, so a given commitment can issue exactly one
+security, and a given `Safe`/`ConvertibleNote`/`Share` can be traced back to
+at most one commitment (or none, if it was issued outside the crowdfunding
+flow — e.g. a directly negotiated SAFE).
 
 When an SPV is used, only one `Stakeholder` (the SPV) appears on the
 company's cap table; individual investors' economics stay inside the
 crowdfunding tables.
+
+### Convertible Note lifecycle
+
+A `Campaign` with `securityType = CONVERTIBLE_NOTE` carries the round's
+uniform terms — `interestRate`, `discountRate`, `valuationCap`,
+`maturityDate` — which get frozen per-investor into
+`InvestmentCommitment.termsSnapshot` at commitment time.
+
+```
+Campaign terms set          Commitment escrowed         Close                Post-close
+(interestRate,         →    (termsSnapshot frozen)  →   (ConvertibleNote  →  interest accrues over time
+ discountRate,                                           row created,        as a pure function of
+ valuationCap,                                           issuedConvertibleN  issueDate/interestRate/
+ maturityDate)                                           oteId set on the    interestMethod
+                                                          commitment)
+                                                                │
+                                        ┌───────────────────────┴───────────────────────┐
+                                        ▼                                               ▼
+                          Qualified financing occurs                      No qualifying round by maturityDate
+                          before maturityDate                             ConvertibleNote.status → MATURED
+                          ConvertibleNote.status → CONVERTED               → repay in cash, or negotiate an
+                          convertedAt + convertedToShareId set               extension (new maturityDate)
+                          → new Share row created under the
+                            same Stakeholder / ShareClass
+```
+
+Key fields that make this work end-to-end:
+
+- `ConvertibleNote.maturityDate` — when the note must convert or become due
+  for repayment/extension if no qualifying financing round has occurred.
+- `ConvertibleNote.interestRate` / `interestMethod` (simple/compound) /
+  `interestAccrual` (daily/monthly/annually/…) — accrued interest is computed
+  as a pure function of these plus `issueDate` and "now" (or the eventual
+  conversion/maturity date); no background job needs to mutate the row to
+  keep a running balance.
+- `ConvertibleNote.convertedAt` + `convertedToShareId` (unique, → `Share`) —
+  set atomically when the note converts at a later priced round, giving full
+  conversion lineage. `Safe` has the identical pair of fields for the same
+  reason (SAFEs convert exactly the same way).
+- `ConvertibleStatusEnum` now includes `CONVERTED` and `MATURED` (in addition
+  to `DRAFT` / `ACTIVE` / `PENDING` / `EXPIRED` / `CANCELLED`) so a note's
+  current disposition is queryable without inspecting timestamps.
 
 ### Key integrity rules (enforced in application logic)
 

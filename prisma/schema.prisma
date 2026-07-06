@@ -307,6 +307,7 @@ model Stakeholder {
   convertibleNotes ConvertibleNote[]
   updates          UpdateRecipient[]
   dataRooms        DataRoomRecipient[]
+  commitments      InvestmentCommitment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -640,6 +641,10 @@ model Template {
   completedOn DateTime?
   eSignAudits EsignAudit[]
 
+  // Crowdfunding commitments that use this document as their subscription /
+  // SAFE / note agreement e-sign envelope.
+  commitments InvestmentCommitment[]
+
   @@index([bucketId])
   @@index([uploaderId])
   @@index([companyId])
@@ -718,6 +723,15 @@ model Share {
   shareClass   ShareClass @relation(fields: [shareClassId], references: [id], onDelete: Cascade)
 
   documents Document[]
+
+  // Back-references: at most one of these is set, recording that this Share
+  // resulted from a SAFE/note converting, rather than a direct investment.
+  convertedFromSafe Safe?            @relation("SafeConversion")
+  convertedFromNote ConvertibleNote? @relation("ConvertibleNoteConversion")
+
+  // Set when this Share was issued directly as the result of a priced-equity
+  // crowdfunding campaign commitment.
+  commitment InvestmentCommitment?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -813,6 +827,7 @@ enum SafeStatusEnum {
   DRAFT
   ACTIVE
   PENDING
+  CONVERTED // converted into equity at a subsequent priced round
   EXPIRED
   CANCELLED
 }
@@ -847,11 +862,22 @@ model Safe {
 
   documents Document[]
 
+  // Conversion: set once this SAFE converts into equity at a priced round.
+  // convertedToShareId is unique because a given SAFE converts into exactly
+  // one Share issuance.
+  convertedAt        DateTime?
+  convertedToShareId String?   @unique
+  convertedToShare   Share?    @relation("SafeConversion", fields: [convertedToShareId], references: [id], onDelete: SetNull)
+
   stakeholderId String
   stakeholder   Stakeholder @relation(fields: [stakeholderId], references: [id], onDelete: Cascade)
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Set when this SAFE was issued as the result of a crowdfunding campaign
+  // commitment (as opposed to a directly-negotiated SAFE).
+  commitment InvestmentCommitment?
 
   issueDate         DateTime
   boardApprovalDate DateTime
@@ -867,6 +893,8 @@ enum ConvertibleStatusEnum {
   DRAFT
   ACTIVE
   PENDING
+  CONVERTED // converted into equity at a subsequent priced round
+  MATURED // reached maturityDate without converting; awaiting repayment/extension
   EXPIRED
   CANCELLED
 }
@@ -913,6 +941,17 @@ model ConvertibleNote {
   interestAccrual         ConvertibleInterestAccrualEnum?
   interestPaymentSchedule ConvertibleInterestPaymentScheduleEnum?
 
+  // The note converts or becomes due for repayment/extension on this date if
+  // no qualified financing round has triggered conversion beforehand.
+  maturityDate DateTime?
+
+  // Conversion: set once this note converts into equity at a priced round.
+  // convertedToShareId is unique because a given note converts into exactly
+  // one Share issuance.
+  convertedAt        DateTime?
+  convertedToShareId String?   @unique
+  convertedToShare   Share?    @relation("ConvertibleNoteConversion", fields: [convertedToShareId], references: [id], onDelete: SetNull)
+
   documents Document[]
 
   stakeholderId String
@@ -920,6 +959,10 @@ model ConvertibleNote {
 
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Set when this note was issued as the result of a crowdfunding campaign
+  // commitment (as opposed to a directly-negotiated note).
+  commitment InvestmentCommitment?
 
   issueDate         DateTime
   boardApprovalDate DateTime
@@ -1624,18 +1667,31 @@ model InvestmentCommitment {
   closeId String?
   close   CampaignClose? @relation(fields: [closeId], references: [id], onDelete: SetNull)
 
-  // Issued security linkage: once closed, securities are created in the cap
-  // table (Safe / ConvertibleNote / Share) either directly to the investor's
-  // Stakeholder record or to the SPV's Stakeholder record.
-  stakeholderId String? // Stakeholder created for this investor on the company
+  // Cap-table linkage: the Stakeholder created for this investor (or the
+  // SPV's Stakeholder, when the campaign pools investors through an Spv).
+  stakeholderId String?
+  stakeholder   Stakeholder? @relation(fields: [stakeholderId], references: [id], onDelete: SetNull)
+
+  // Issued security linkage: once the commitment is COMPLETED, exactly one of
+  // these is populated, depending on the campaign's securityType. All three
+  // are unique because a given commitment issues exactly one security.
+  issuedSafeId String? @unique
+  issuedSafe   Safe?   @relation(fields: [issuedSafeId], references: [id], onDelete: SetNull)
+
+  issuedConvertibleNoteId String?          @unique
+  issuedConvertibleNote   ConvertibleNote? @relation(fields: [issuedConvertibleNoteId], references: [id], onDelete: SetNull)
+
+  issuedShareId String? @unique
+  issuedShare   Share?  @relation(fields: [issuedShareId], references: [id], onDelete: SetNull)
 
   // Regulatory acknowledgements
   educationalMaterialsAcceptedAt DateTime?
   cancellationTermsAcceptedAt    DateTime?
   riskAcknowledgedAt             DateTime?
 
-  // Signature: subscription / SAFE agreement e-sign envelope
-  agreementTemplateId String? // -> Template (eSign)
+  // Signature: subscription / SAFE / note agreement e-sign envelope
+  agreementTemplateId String?
+  agreementTemplate   Template? @relation(fields: [agreementTemplateId], references: [id], onDelete: SetNull)
 
   cancelledAt DateTime?
   refundedAt  DateTime?
@@ -1653,6 +1709,7 @@ model InvestmentCommitment {
   @@index([perkId])
   @@index([closeId])
   @@index([stakeholderId])
+  @@index([agreementTemplateId])
 }
 
 enum PaymentTransactionTypeEnum {

@@ -146,6 +146,7 @@ Enum SafeStatusEnum {
   DRAFT
   ACTIVE
   PENDING
+  CONVERTED [note: 'converted into equity at a subsequent priced round']
   EXPIRED
   CANCELLED
 }
@@ -165,6 +166,8 @@ Enum ConvertibleStatusEnum {
   DRAFT
   ACTIVE
   PENDING
+  CONVERTED [note: 'converted into equity at a subsequent priced round']
+  MATURED [note: 'reached maturityDate without converting; awaiting repayment/extension']
   EXPIRED
   CANCELLED
 }
@@ -697,6 +700,8 @@ Table Safe {
   mfn boolean [not null, default: false, note: 'Most Favored Nation']
   proRata boolean [not null, default: false]
   additionalTerms varchar
+  convertedAt timestamp [note: 'set once this SAFE converts into equity at a priced round']
+  convertedToShareId varchar [unique, ref: - Share.id]
   stakeholderId varchar [not null, ref: > Stakeholder.id]
   companyId varchar [not null, ref: > Company.id]
   issueDate timestamp [not null]
@@ -725,6 +730,9 @@ Table ConvertibleNote {
   interestMethod ConvertibleInterestMethodEnum
   interestAccrual ConvertibleInterestAccrualEnum
   interestPaymentSchedule ConvertibleInterestPaymentScheduleEnum
+  maturityDate timestamp [note: 'note converts or becomes due for repayment/extension on this date']
+  convertedAt timestamp [note: 'set once this note converts into equity at a priced round']
+  convertedToShareId varchar [unique, ref: - Share.id]
   stakeholderId varchar [not null, ref: > Stakeholder.id]
   companyId varchar [not null, ref: > Company.id]
   issueDate timestamp [not null]
@@ -1297,11 +1305,14 @@ Table InvestmentCommitment {
   perkId varchar [ref: > CampaignPerk.id]
   termsSnapshot jsonb [not null, default: '{}', note: 'frozen copy of offering terms at commitment time']
   closeId varchar [ref: > CampaignClose.id]
-  stakeholderId varchar [note: 'Stakeholder created for this investor once securities issue']
+  stakeholderId varchar [ref: > Stakeholder.id, note: 'Stakeholder created for this investor once securities issue']
+  issuedSafeId varchar [unique, ref: > Safe.id, note: 'set for SAFE campaigns once completed']
+  issuedConvertibleNoteId varchar [unique, ref: > ConvertibleNote.id, note: 'set for convertible-note campaigns once completed']
+  issuedShareId varchar [unique, ref: > Share.id, note: 'set for priced-equity campaigns once completed']
   educationalMaterialsAcceptedAt timestamp
   cancellationTermsAcceptedAt timestamp
   riskAcknowledgedAt timestamp
-  agreementTemplateId varchar [note: 'subscription / SAFE e-sign envelope (Template)']
+  agreementTemplateId varchar [ref: > Template.id, note: 'subscription / SAFE / note e-sign envelope']
   cancelledAt timestamp
   refundedAt timestamp
   escrowedAt timestamp
@@ -1316,6 +1327,7 @@ Table InvestmentCommitment {
     (perkId)
     (closeId)
     (stakeholderId)
+    (agreementTemplateId)
   }
 }
 
