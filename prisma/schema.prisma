@@ -65,6 +65,11 @@ model User {
   identityProvider String?
 
   accessTokens AccessToken[]
+
+  investorProfile  InvestorProfile?
+  campaignFollows  CampaignFollow[]
+  campaignComments CampaignComment[]
+  commentLikes     CampaignCommentLike[]
 }
 
 enum CredentialDeviceTypeEnum {
@@ -160,6 +165,9 @@ model Company {
   customRoles      CustomRole[]
 
   BankAccount BankAccount[]
+
+  founderProfiles FounderProfile[]
+  campaigns       Campaign[]
 
   @@unique([publicId])
 }
@@ -1142,4 +1150,590 @@ model AccessToken {
 
   @@index([userId])
   @@index([typeEnum, clientId])
+}
+
+// ---------------------------------------------------------------------------
+// Crowdfunding (Wefunder-style equity crowdfunding)
+// ---------------------------------------------------------------------------
+//
+// Domain overview:
+//   InvestorProfile        - investor identity, KYC, accreditation & Reg CF limits
+//   Campaign               - a public fundraising round ("raise") for a Company
+//   CampaignPerk           - reward tiers unlocked at investment amounts
+//   CampaignFaq            - founder-answered questions shown on the pitch page
+//   CampaignUpdate         - public progress updates posted to a campaign
+//   CampaignComment        - threaded Q&A / discussion (the "Ask a Question" wall)
+//   CampaignFollow         - watchlist; users following a campaign
+//   InvestmentCommitment   - a single investor's commitment to a campaign
+//   PaymentTransaction     - money movement (charge, refund, disbursement)
+//   EscrowAccount          - the escrow holding funds while a campaign is live
+//   CampaignClose          - a rolling or final close disbursing escrowed funds
+//   Spv / LeadInvestor     - special purpose vehicle & lead investor structure
+//   FounderProfile         - team members displayed on the campaign page
+//   CampaignCategory       - browsable categories (tags) for discovery
+
+enum InvestorEntityTypeEnum {
+  INDIVIDUAL
+  LLC
+  CORPORATION
+  PARTNERSHIP
+  TRUST
+  IRA
+}
+
+enum KycStatusEnum {
+  NOT_STARTED
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum AccreditationStatusEnum {
+  NOT_ACCREDITED
+  SELF_REPORTED
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+model InvestorProfile {
+  id       String @id @default(cuid())
+  publicId String @unique
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Investing entity (individual by default, or an LLC / trust / IRA etc.)
+  entityType InvestorEntityTypeEnum @default(INDIVIDUAL)
+  entityName String? // required when entityType != INDIVIDUAL
+
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime?
+  phone       String?
+
+  streetAddress String?
+  city          String?
+  state         String?
+  zipcode       String?
+  country       String  @default("US")
+
+  // Tax ID (SSN / EIN) - store encrypted or tokenized, never plaintext
+  taxIdToken String?
+
+  // Reg CF annual investment limit inputs (self reported, in USD)
+  annualIncome Decimal? @db.Decimal(15, 2)
+  netWorth     Decimal? @db.Decimal(15, 2)
+
+  kycStatus            KycStatusEnum @default(NOT_STARTED)
+  kycVerifiedAt        DateTime?
+  kycProviderReference String? // eg. Persona / Plaid IDV inquiry id
+
+  accreditationStatus     AccreditationStatusEnum @default(NOT_ACCREDITED)
+  accreditationVerifiedAt DateTime?
+  accreditationExpiresAt  DateTime?
+
+  // Default payout / charge destination (Stripe customer, ACH source, etc.)
+  paymentCustomerReference String?
+
+  bio      String?
+  isPublic Boolean @default(false) // show name publicly on campaign pages
+  image    String?
+
+  commitments InvestmentCommitment[]
+  leadRoles   LeadInvestor[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([kycStatus])
+  @@index([accreditationStatus])
+}
+
+model FounderProfile {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  name     String
+  title    String // eg. CEO, CTO
+  bio      String?
+  image    String?
+  email    String?
+  linkedin String?
+  twitter  String?
+
+  displayOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+}
+
+enum CampaignStatusEnum {
+  DRAFT // being prepared by the founder
+  IN_REVIEW // compliance / platform review
+  TESTING_THE_WATERS // Reg CF "TTW" - collecting non-binding indications of interest
+  LIVE // accepting investments
+  FUNDED // hit its goal, still accepting until deadline
+  CLOSED // final close completed, funds disbursed
+  CANCELLED // withdrawn before closing; commitments refunded
+  FAILED // deadline passed below minimum goal; commitments refunded
+}
+
+enum RegulationTypeEnum {
+  REG_CF // Regulation Crowdfunding (up to $5M / 12 months)
+  REG_D_506B // accredited only, no general solicitation
+  REG_D_506C // accredited only, general solicitation allowed
+  REG_A_PLUS // Regulation A+ (up to $75M)
+}
+
+enum CampaignSecurityTypeEnum {
+  SAFE
+  PRICED_EQUITY // priced round, common or preferred stock
+  CONVERTIBLE_NOTE
+  REVENUE_SHARE
+  DEBT
+}
+
+model Campaign {
+  id       String @id @default(cuid())
+  publicId String @unique
+  slug     String @unique // eg. "acme-robotics"
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  status         CampaignStatusEnum       @default(DRAFT)
+  regulationType RegulationTypeEnum       @default(REG_CF)
+  securityType   CampaignSecurityTypeEnum @default(SAFE)
+
+  // Pitch page content
+  title      String // headline, eg. "The future of robotics"
+  tagline    String? // one-liner shown on browse cards
+  coverImage String?
+  videoUrl   String?
+  /// Rich pitch sections (problem, solution, traction, etc.) as structured JSON
+  pitch      Json    @default("{}")
+  /// Bullet highlights shown near the top of the page
+  highlights Json    @default("[]")
+  risks      String? // required risk disclosures
+
+  // Terms of the offering
+  minimumGoal   Decimal  @db.Decimal(15, 2) // must be reached or all funds are refunded
+  maximumGoal   Decimal  @db.Decimal(15, 2) // hard cap (eg. $5M for Reg CF)
+  minInvestment Decimal  @default(100) @db.Decimal(15, 2)
+  maxInvestment Decimal? @db.Decimal(15, 2)
+
+  // Security terms (which fields apply depends on securityType)
+  valuationCap            Decimal?  @db.Decimal(18, 2)
+  discountRate            Float? // percentage, eg. 20 = 20%
+  interestRate            Float? // notes / debt
+  maturityDate            DateTime? // notes / debt
+  pricePerShare           Decimal?  @db.Decimal(15, 6) // priced equity
+  preMoneyValuation       Decimal?  @db.Decimal(18, 2)
+  revenueSharePercent     Float? // revenue share agreements
+  revenueShareCapMultiple Float? // eg. 2.0 = investors repaid up to 2x
+
+  // Denormalized live counters (kept in sync by application logic / triggers)
+  amountCommitted Decimal @default(0) @db.Decimal(15, 2)
+  amountEscrowed  Decimal @default(0) @db.Decimal(15, 2)
+  amountDisbursed Decimal @default(0) @db.Decimal(15, 2)
+  investorCount   Int     @default(0)
+
+  // Schedule
+  launchedAt DateTime? // when it went LIVE
+  deadline   DateTime? // offering deadline (Reg CF requires one)
+  closedAt   DateTime? // final close
+
+  // Compliance artifacts
+  formCFiledAt  DateTime? // SEC Form C filing date (Reg CF)
+  secFileNumber String?
+
+  escrow      EscrowAccount?
+  spv         Spv?
+  perks       CampaignPerk[]
+  faqs        CampaignFaq[]
+  updates     CampaignUpdate[]
+  comments    CampaignComment[]
+  followers   CampaignFollow[]
+  commitments InvestmentCommitment[]
+  closes      CampaignClose[]
+  leads       LeadInvestor[]
+  categories  CampaignToCategory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([status])
+  @@index([status, launchedAt])
+}
+
+model CampaignCategory {
+  id   String @id @default(cuid())
+  name String @unique // eg. "AI", "Fintech", "Consumer"
+  slug String @unique
+
+  campaigns CampaignToCategory[]
+}
+
+model CampaignToCategory {
+  campaignId String
+  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  categoryId String
+  category   CampaignCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, categoryId])
+  @@index([campaignId])
+  @@index([categoryId])
+}
+
+model CampaignPerk {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  title         String // eg. "Early Bird"
+  description   String
+  minimumAmount Decimal @db.Decimal(15, 2) // invest at least this much to unlock
+  quantityLimit Int? // null = unlimited
+  claimedCount  Int     @default(0)
+  displayOrder  Int     @default(0)
+
+  commitments InvestmentCommitment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+}
+
+model CampaignFaq {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  question     String
+  answer       String
+  displayOrder Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+}
+
+model CampaignUpdate {
+  id       String @id @default(cuid())
+  publicId String @unique
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  title   String
+  content Json
+  html    String
+
+  // Investor-only updates are hidden from the public pitch page
+  investorsOnly Boolean   @default(false)
+  publishedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([campaignId, publishedAt])
+}
+
+model CampaignComment {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Threading: top-level comments have parentId = null
+  parentId String?
+  parent   CampaignComment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replies  CampaignComment[] @relation("CommentThread")
+
+  body String
+
+  // Badges rendered next to the author name
+  isFounderResponse Boolean @default(false)
+  isInvestor        Boolean @default(false) // author had a commitment at post time
+
+  likeCount Int                   @default(0)
+  likes     CampaignCommentLike[]
+
+  deletedAt DateTime? // soft delete keeps thread structure intact
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId, createdAt])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model CampaignCommentLike {
+  commentId String
+  comment   CampaignComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([commentId, userId])
+  @@index([commentId])
+  @@index([userId])
+}
+
+model CampaignFollow {
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Testing-the-waters: non-binding indication of interest amount
+  indicatedAmount Decimal? @db.Decimal(15, 2)
+
+  createdAt DateTime @default(now())
+
+  @@id([campaignId, userId])
+  @@index([campaignId])
+  @@index([userId])
+}
+
+// A lead investor sets terms / writes the pitch memo; on Wefunder every Reg CF
+// deal has a lead who typically invests a larger check and manages the SPV.
+model LeadInvestor {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  investorProfileId String
+  investorProfile   InvestorProfile @relation(fields: [investorProfileId], references: [id], onDelete: Cascade)
+
+  memo         String? // why I invested
+  carryPercent Float? // lead's carried interest in the SPV, eg. 5 = 5%
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, investorProfileId])
+  @@index([campaignId])
+  @@index([investorProfileId])
+}
+
+// Special Purpose Vehicle: small investors are pooled into one entity that
+// appears as a single line on the company's cap table.
+model Spv {
+  id String @id @default(cuid())
+
+  campaignId String   @unique
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  legalName            String // eg. "Wefunder SPV LLC - Series Acme"
+  ein                  String?
+  jurisdiction         String  @default("DE")
+  managementFeePercent Float?
+  carryPercent         Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EscrowProviderEnum {
+  BANK_TRUST // eg. Thread Bank / Evolve
+  BROKER_DEALER
+  OTHER
+}
+
+model EscrowAccount {
+  id String @id @default(cuid())
+
+  campaignId String   @unique
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  provider          EscrowProviderEnum @default(BANK_TRUST)
+  providerReference String // account id at the escrow agent
+  balance           Decimal            @default(0) @db.Decimal(15, 2)
+
+  openedAt DateTime  @default(now())
+  closedAt DateTime?
+
+  transactions PaymentTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum CommitmentStatusEnum {
+  PENDING // created, payment not yet collected
+  PAYMENT_PROCESSING // charge initiated (ACH can take days)
+  ESCROWED // funds received into escrow
+  RECONFIRMATION_REQUIRED // material change to offering; investor must reconfirm
+  CANCELLED // investor cancelled (allowed until 48h before close)
+  REFUNDED // funds returned (failed campaign, cancellation, or rejection)
+  COMPLETED // included in a close; securities issued
+}
+
+enum PaymentMethodEnum {
+  ACH
+  WIRE
+  CARD
+  CHECK
+}
+
+model InvestmentCommitment {
+  id       String @id @default(cuid())
+  publicId String @unique // eg. INV-000123, shown on receipts
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  investorProfileId String
+  investorProfile   InvestorProfile @relation(fields: [investorProfileId], references: [id], onDelete: Cascade)
+
+  status CommitmentStatusEnum @default(PENDING)
+  amount Decimal              @db.Decimal(15, 2)
+
+  paymentMethod PaymentMethodEnum @default(ACH)
+
+  perkId String?
+  perk   CampaignPerk? @relation(fields: [perkId], references: [id], onDelete: SetNull)
+
+  // Snapshot of terms at commitment time (terms can change mid-campaign,
+  // which triggers RECONFIRMATION_REQUIRED for earlier commitments)
+  /// Frozen copy of the campaign's security terms when the investor committed
+  termsSnapshot Json @default("{}")
+
+  // Set once the commitment is included in a close
+  closeId String?
+  close   CampaignClose? @relation(fields: [closeId], references: [id], onDelete: SetNull)
+
+  // Issued security linkage: once closed, securities are created in the cap
+  // table (Safe / ConvertibleNote / Share) either directly to the investor's
+  // Stakeholder record or to the SPV's Stakeholder record.
+  stakeholderId String? // Stakeholder created for this investor on the company
+
+  // Regulatory acknowledgements
+  educationalMaterialsAcceptedAt DateTime?
+  cancellationTermsAcceptedAt    DateTime?
+  riskAcknowledgedAt             DateTime?
+
+  // Signature: subscription / SAFE agreement e-sign envelope
+  agreementTemplateId String? // -> Template (eSign)
+
+  cancelledAt DateTime?
+  refundedAt  DateTime?
+  escrowedAt  DateTime?
+  completedAt DateTime?
+
+  transactions PaymentTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([campaignId, status])
+  @@index([investorProfileId])
+  @@index([perkId])
+  @@index([closeId])
+  @@index([stakeholderId])
+}
+
+enum PaymentTransactionTypeEnum {
+  CHARGE // investor -> escrow
+  REFUND // escrow -> investor
+  DISBURSEMENT // escrow -> company (at a close)
+  FEE // platform fee taken at disbursement
+}
+
+enum PaymentTransactionStatusEnum {
+  INITIATED
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REVERSED
+}
+
+model PaymentTransaction {
+  id       String @id @default(cuid())
+  publicId String @unique
+
+  commitmentId String?
+  commitment   InvestmentCommitment? @relation(fields: [commitmentId], references: [id], onDelete: SetNull)
+
+  escrowAccountId String
+  escrowAccount   EscrowAccount @relation(fields: [escrowAccountId], references: [id], onDelete: Cascade)
+
+  type   PaymentTransactionTypeEnum
+  status PaymentTransactionStatusEnum @default(INITIATED)
+
+  amount   Decimal @db.Decimal(15, 2)
+  currency String  @default("usd") @db.Char(3)
+
+  provider          String? // eg. "stripe", "dwolla", "wire"
+  providerReference String? // charge / transfer id at the provider
+  failureReason     String?
+
+  initiatedAt DateTime  @default(now())
+  settledAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([commitmentId])
+  @@index([escrowAccountId])
+  @@index([status])
+  @@index([providerReference])
+}
+
+enum CampaignCloseStatusEnum {
+  SCHEDULED
+  DISBURSING
+  COMPLETED
+  CANCELLED
+}
+
+// Reg CF allows rolling closes: once past the minimum goal, funds can be
+// disbursed in tranches while the campaign keeps accepting new investments.
+model CampaignClose {
+  id String @id @default(cuid())
+
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  status  CampaignCloseStatusEnum @default(SCHEDULED)
+  isFinal Boolean                 @default(false)
+
+  // 48-hour notice to investors is required before a rolling close
+  noticeSentAt DateTime?
+  scheduledFor DateTime
+  completedAt  DateTime?
+
+  grossAmount     Decimal @default(0) @db.Decimal(15, 2) // sum of commitments in this close
+  platformFee     Decimal @default(0) @db.Decimal(15, 2)
+  disbursedAmount Decimal @default(0) @db.Decimal(15, 2) // gross - fees
+
+  commitments InvestmentCommitment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([campaignId, status])
 }
